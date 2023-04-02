@@ -2,4 +2,4 @@
 
 (defpackage #:docs-qa
   (:use #:cl #:uiop #:cl-json #:openai #:sqlite #:split-sequence)
-  (:export #:qa))
+  (:export #:QA))

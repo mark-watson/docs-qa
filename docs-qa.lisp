@@ -29,6 +29,11 @@
 (defun truncate-string (string length)
   (subseq string 0 (min length (length string))))
 
+(defun break-into-chunks (text chunk-size)
+  "Breaks TEXT into chunks of size CHUNK-SIZE."
+  (loop for start from 0 below (length text) by chunk-size
+        collect (subseq text start (min (+ start chunk-size) (length text)))))
+
 (defun decode-row (row)
   (let ((id (nth 0 row))
         (context (nth 1 row))
@@ -46,13 +51,14 @@
 
 (execute-non-query
  *db*
- "CREATE TABLE documents (document_path TEXT PRIMARY KEY, content TEXT, embedding TEXT);")
+ "CREATE TABLE documents (document_path TEXT, content TEXT, embedding TEXT);")
 (execute-non-query *db* "CREATE INDEX idx_documents_id ON documents (document_path);")
 (execute-non-query *db* "CREATE INDEX idx_documents_content ON documents (content);")
 (execute-non-query *db* "CREATE INDEX idx_documents_embedding ON documents (embedding);")
 
 (defun insert-document (document_path content embedding)
-  (format t "~%insert-document:~%  content:~A~%  embedding: ~A~%" content embedding)
+  ;;(format t "~%insert-document:~%  content:~A~%  embedding: ~A~%" content embedding)
+  (format t "~%insert-document:~%  content:~A~%~%" content)
   (execute-non-query
    *db*
    "INSERT INTO documents (document_path, content, embedding) VALUES (?, ?, ?);"
@@ -79,9 +85,13 @@
     (execute-to-list *db* "SELECT * FROM documents;")))
 
 (defun create-document (fpath)
-  (let* ((content  (truncate-string (read-file fpath) 40))
-         (embedding (openai::embeddings content)))
-    (insert-document fpath content embedding)))
+  (let ((contents (break-into-chunks (read-file fpath) 200)))
+    (dolist (content contents)
+      (handler-case	  
+	  (let ((embedding (openai::embeddings content)))
+	    (insert-document fpath content embedding))
+	(error (c)
+	       (format t "Error: ~&~a~%" c))))))
 
 (create-document "data/sports.txt")
 (create-document "data/chemistry.txt")
@@ -93,19 +103,21 @@
   (let ((emb (openai::embeddings query))
         (ret))
     (dolist (doc (all-documents))
-      (let* ((emb2 (nth 2 doc))
-             (similarity (openai:dot-product emb emb2)))
-        (format t "simlilarity = ~A~%" similarity)
-        (if (> similarity cutoff)
-            (progn
-	      (setf ret (cons (nth 1 doc) ret))
-	      (setf ret (cons " " ret))))))
+      (let ((context (nth 1 doc)) ;; ignore fpath for now
+	    (embedding (nth 2 doc)))
+	(let ((score (openai::dot-product emb embedding)))
+	  (when (> score cutoff)
+	    (push context ret)))))
     (print ret)
     (let* ((context (concat-strings ret))
            (query-with-context (concat-strings (list context "  Question:  " query))))
-      (print query-with-context)
+      (format t "~% **** query-with-context: ~a~%" query-with-context)
       (openai:answer-question query-with-context 40))))
 
-(print (semantic-match "What energy than photons can be absorbed by a molecule?"))
+(defun QA (query)
+  (let ((answer (semantic-match query)))
+    (format t "~%~%** query: ~A~%** answer: ~A~%~%" query answer)))
 
+(QA "What is the history of the science of chemistry?")
+(QA "What are the advantages of engainging in sports?")
     
