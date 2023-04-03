@@ -1,4 +1,4 @@
-# Common Lisp library for Documents Question Answering Using OpenAI GPT3 APIs
+# Common Lisp library for Documents Question Answering Using OpenAI GPT3 APIs and a Local Embeddings Vector Database
 
 From my book URI: https://leanpub.com/lovinglisp
 
@@ -9,6 +9,13 @@ to your **~/quicklisp/local-projects** directory. Then in **~/quicklisp/local-pr
 
 to get all of the library examples from my book.
 
+Note: this library is under construction, but the code as-is works and will hopefully be useful.
+
+## Require's my openai library
+
+You need to Quicklisp install:
+
+    https://github.com/mark-watson/openai
 
 ## setting your OpenAI API key
  
@@ -16,17 +23,29 @@ to get all of the library examples from my book.
  
 ## Example:
 
-
-## Embeddings (from 'openai' package)
-
 ```
-(setf e1 (openai::embeddings "John bought a new car"))
+$ sbcl
+* (quicklisp:quickload :docs-qa)
+To load "docs-qa":
+  Load 1 ASDF system:
+    docs-qa
+; Loading "docs-qa"
+..................................................
+[package docs-qa]To load "sqlite":
+  Load 1 ASDF system:
+    sqlite
+; Loading "sqlite"
+.
 
-(setf e2 (openai::embeddings "who bought what"))
+#<sqlite-handle {7005CA3783}>
+(:docs-qa)
+* (in-package :docs-qa)
+#<package "DOCS-QA">
+* (test)
 
-CL-USER 23 > (openai::dot-product e1 e1)
-0.9999999
+** query: What is the history of the science of chemistry?
+** answer: The history of chemistry as a science began in the 6th century BC, when the Greek philosopher Leucippus and his student Democritus posited the existence of an endless number of worlds
 
-CL-USER 24 > (openai::dot-product e1 e2)
-0.7841768
+** query: What are the advantages of engainging in sports?
+** answer: The advantages of engaging in sports are:n1. It helps to develop the body and mind.n2. It helps to develop the character.n3. It helps to develop the personality.
 ```

@@ -1,5 +1,7 @@
 (in-package #:docs-qa)
 
+;; Copyright 2023 Mark Watson. All Rights Reserved. Apache 2 License
+
 (ql:quickload :sqlite)
 (use-package :sqlite)
 
@@ -48,13 +50,16 @@
 ;;(defvar *db* (connect "test.db"))
 
 (pprint *db*)
-
-(execute-non-query
- *db*
- "CREATE TABLE documents (document_path TEXT, content TEXT, embedding TEXT);")
-(execute-non-query *db* "CREATE INDEX idx_documents_id ON documents (document_path);")
-(execute-non-query *db* "CREATE INDEX idx_documents_content ON documents (content);")
-(execute-non-query *db* "CREATE INDEX idx_documents_embedding ON documents (embedding);")
+(handler-case
+    (progn
+      (execute-non-query
+       *db*
+       "CREATE TABLE documents (document_path TEXT, content TEXT, embedding TEXT);")
+      (execute-non-query *db* "CREATE INDEX idx_documents_id ON documents (document_path);")
+      (execute-non-query *db* "CREATE INDEX idx_documents_content ON documents (content);")
+      (execute-non-query *db* "CREATE INDEX idx_documents_embedding ON documents (embedding);"))
+ (error (c)
+   (print "Database and indices is already created")))
 
 (defun insert-document (document_path content embedding)
   ;;(format t "~%insert-document:~%  content:~A~%  embedding: ~A~%" content embedding)
@@ -93,9 +98,6 @@
 	(error (c)
 	       (format t "Error: ~&~a~%" c))))))
 
-(create-document "data/sports.txt")
-(create-document "data/chemistry.txt")
-
 ;;(defvar docs (all-documents))
 ;;(pprint docs)
 
@@ -108,16 +110,21 @@
 	(let ((score (openai::dot-product emb embedding)))
 	  (when (> score cutoff)
 	    (push context ret)))))
-    (print ret)
     (let* ((context (concat-strings ret))
            (query-with-context (concat-strings (list context "  Question:  " query))))
-      (format t "~% **** query-with-context: ~a~%" query-with-context)
       (openai:answer-question query-with-context 40))))
 
 (defun QA (query)
   (let ((answer (semantic-match query)))
-    (format t "~%~%** query: ~A~%** answer: ~A~%~%" query answer)))
+    (format t "~%~%** query: ~A~%** answer: ~A~%~%" query answer)
+    answer))
 
-(QA "What is the history of the science of chemistry?")
-(QA "What are the advantages of engainging in sports?")
+(defun test()
+  "Test code for Semantic Document Search Using OpenAI GPT APIs and local vector database"
+  (create-document "data/sports.txt")
+  (create-document "data/chemistry.txt")
+  (QA "What is the history of the science of chemistry?")
+  (QA "What are the advantages of engainging in sports?"))
+
+;; test()
     
