@@ -5,8 +5,6 @@
 (ql:quickload :sqlite)
 (use-package :sqlite)
 
-;;(use-package :parse-float)
-
 ;; define the environment variable "OPENAI_KEY" with the value of your OpenAI API key
 
 (defun write-floats-to-string (lst)
@@ -25,11 +23,18 @@
         (read-sequence string instream)
         string))))
 
-(defun concat-strings (list)
-  (apply #'concatenate 'string list))
+(defun join-strings (separator list)
+  (reduce (lambda (a b) (concatenate 'string a separator b)) list))
 
 (defun truncate-string (string length)
   (subseq string 0 (min length (length string))))
+
+(defun interleave (list1 list2)
+  (if (or (null list1) (null list2))
+      (append list1 list2)
+      (cons (car list1)
+            (cons (car list2)
+                  (interleave (cdr list1) (cdr list2))))))
 
 (defun break-into-chunks (text chunk-size)
   "Breaks TEXT into chunks of size CHUNK-SIZE."
@@ -41,10 +46,6 @@
         (context (nth 1 row))
         (embedding (read-from-string (nth 2 row))))
     (list id context embedding)))
-
-(defun qa (question)
-  (let ((answer (openai:answer-question question 60)))
-    (format t "~&~a~%" answer)))
 
 (defvar *db* (connect ":memory:"))
 ;;(defvar *db* (connect "test.db"))
@@ -101,7 +102,7 @@
 ;;(defvar docs (all-documents))
 ;;(pprint docs)
 
-(defun semantic-match (query &optional (cutoff 0.7))
+(defun semantic-match (query custom-context &optional (cutoff 0.7))
   (let ((emb (openai::embeddings query))
         (ret))
     (dolist (doc (all-documents))
@@ -110,14 +111,44 @@
 	(let ((score (openai::dot-product emb embedding)))
 	  (when (> score cutoff)
 	    (push context ret)))))
-    (let* ((context (concat-strings ret))
-           (query-with-context (concat-strings (list context "  Question:  " query))))
+    (format t "~%semantic-search: ret=~A~%" ret)
+    (let* ((context (join-strings " . " (reverse ret)))
+           (query-with-context (join-strings " " (list context custom-context "Question:" query))))
       (openai:answer-question query-with-context 40))))
 
-(defun QA (query)
-  (let ((answer (semantic-match query)))
-    (format t "~%~%** query: ~A~%** answer: ~A~%~%" query answer)
+(defun QA (query &optional (quiet nil))
+  (let ((answer (semantic-match query "")))
+    (if (not quiet)
+        (format t "~%~%** query: ~A~%** answer: ~A~%~%" query answer))
     answer))
+
+;; Specialized code to chat about the documents:
+
+(defun CHAT ()
+  (let ((messages '(""))
+        (responses '("")))
+    (loop
+       (format t "~%Enter chat (STOP or empty line to stop) >> ")
+       (let ((string (read-line))
+             response)
+         (cond ((or (string= string "STOP") (< (length string) 1)) (return))
+               (t (let (prompt
+                        custom-context)
+                    (setf custom-context
+                          (concatenate
+                           'string
+                           "PREVIOUS CHAT: "
+                           (join-strings  " "
+                                          (reverse messages))))
+                    (push string messages)
+                    (print messages) ;; (print responses)
+                    (print prompt)
+                    (setf response (semantic-match string custom-context))
+                    (push response responses)
+                    (format t "~%Response: ~A~%" response))))))
+    (list (reverse messages) (reverse responses))))
+
+;; test code:
 
 (defun test()
   "Test code for Semantic Document Search Using OpenAI GPT APIs and local vector database"
